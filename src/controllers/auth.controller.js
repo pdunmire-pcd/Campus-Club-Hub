@@ -1,4 +1,4 @@
-import { createUser, findUserByUsername } from "../services/user.service.js";
+import { createUser, findUserByUsername, validatePassword } from "../services/user.service.js";
 
 const loginPage = (req, res) => {
     res.render("login", {
@@ -22,7 +22,7 @@ const register = async (req, res) => {
     }
 
     await createUser(username, password, role);
-    res.redirect("/login");
+    return res.redirect("/login");
 };
 
 const login = async (req, res) => {
@@ -30,11 +30,32 @@ const login = async (req, res) => {
 
     const user = await findUserByUsername(username);
 
-    if (!user || user.password !== password) {
+    if (!user || !(await validatePassword(password, user.password))) {
         return res.redirect("/login?errors=Invalid credentials");
     }
+    req.session.user = { userId: user.userId, username: user.username, role: user.role };
 
-    res.redirect("/dashboard");
+    return res.redirect("/dashboard");
 };
 
-export default { loginPage, registerPage, register, login };
+const isLoggedIn = (req, res, next) => {
+    if (!req.user) {
+        return res.redirect("/login");
+    }
+    return next();
+};
+
+const hasRole = (role) => (req, res, next) => {
+    if (!req.user || req.user.role !== role) {
+        return res.redirect("/dashboard");
+    }
+    return next();
+};
+
+const logout = (req, res) => {
+    req.session.destroy(() => {
+        res.redirect("/login");
+    });
+};
+
+export default { loginPage, registerPage, register, login, isLoggedIn, hasRole, logout };
